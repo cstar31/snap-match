@@ -19,7 +19,7 @@
   .pill { background:rgba(255,255,255,.08); border:1px solid rgba(255,255,255,.14); border-radius:10px; padding:5px 10px; font-weight:750; font-size:.85rem; }
   .pill b { color:var(--good); }
   .target { display:flex; align-items:center; gap:8px; font-size:.8rem; color:var(--muted); margin:0 2px 8px; }
-  .target .swatch { width:30px; height:30px; border-radius:50%; background-size:cover; background-position:center; border:2px solid #fff; box-shadow:0 0 10px rgba(255,255,255,.4); }
+  .target .swatch { width:32px; height:32px; border-radius:24%; background-size:cover; background-position:center; border:2px solid #fff; box-shadow:0 0 10px rgba(255,255,255,.4); }
   #stage { position:relative; flex:1; border-radius:18px; overflow:hidden; border:1px solid rgba(255,255,255,.14);
     background:linear-gradient(180deg, rgba(124,92,255,.10), rgba(255,92,168,.06)); touch-action:none; }
   #cv { display:block; width:100%; height:100%; }
@@ -27,8 +27,7 @@
   .flash { position:absolute; inset:0; background:var(--warn); opacity:0; pointer-events:none; mix-blend-mode:screen; }
   .flash.go { animation:fl .25s ease-out; }
   @keyframes fl { 0%{opacity:.45;} 100%{opacity:0;} }
-  .overlay { position:absolute; inset:0; display:flex; align-items:center; justify-content:center; padding:20px; z-index:10;
-    background:rgba(10,5,22,.82); }
+  .overlay { position:absolute; inset:0; display:flex; align-items:center; justify-content:center; padding:20px; z-index:10; background:rgba(10,5,22,.82); }
   .overlay.hide { display:none; }
   .card { width:100%; max-width:320px; background:linear-gradient(160deg,#2a1750,#190f33); border:1px solid rgba(255,255,255,.16);
     border-radius:20px; padding:22px; text-align:center; }
@@ -37,7 +36,7 @@
   .card .big { font-size:2rem; font-weight:850; color:var(--good); margin:.2rem 0; }
   button.btn { width:100%; border:none; border-radius:14px; padding:13px; font-size:1rem; font-weight:750; cursor:pointer; color:#fff;
     background:linear-gradient(135deg,var(--accent),var(--accent2)); box-shadow:0 8px 22px rgba(124,92,255,.35); }
-  .mini { width:54px; height:54px; border-radius:50%; background-size:cover; background-position:center; margin:0 auto 8px; border:3px solid #fff; }
+  .mini { width:56px; height:56px; border-radius:24%; background-size:cover; background-position:center; margin:0 auto 8px; border:3px solid #fff; }
 </style>
 </head>
 <body>
@@ -46,15 +45,13 @@
     <div class="title">⚡ Bonus Round <small>5× POINTS</small></div>
     <div class="hud"><div class="pill">⏱ <span id="time">25</span></div><div class="pill">★ <b id="bonus">0</b></div></div>
   </div>
-  <div class="target"><div class="swatch" id="tsw"></div> Catch only <b id="tname" style="color:var(--txt)">this person</b> — dodge the rest!</div>
+  <div class="target"><div class="swatch" id="tsw"></div> Catch only <b id="tname" style="color:var(--txt)">your person</b> — wrong blocks cost points!</div>
   <div id="stage">
     <canvas id="cv"></canvas>
     <div class="flash" id="flash"></div>
-    <div class="overlay" id="ov">
-      <div class="card" id="card"></div>
-    </div>
+    <div class="overlay" id="ov"><div class="card" id="card"></div></div>
   </div>
-  <div class="hint">Slide left/right to move · nudge up/down a little · it speeds up. Catch your person, avoid everyone else.</div>
+  <div class="hint">Slide to move · nudge up/down a little · it speeds up. <b style="color:var(--good)">+50</b> your person · <b style="color:var(--warn)">−25</b> anyone else.</div>
 </div>
 
 <script>/* Auto-generated face tiles cropped on-device from the owner's photos. */
@@ -71,51 +68,49 @@ window.SNAP_FACES = [
 (function(){
   'use strict';
   const FACES = (window.SNAP_FACES && window.SNAP_FACES.length) ? window.SNAP_FACES : null;
+  // Same palette as the main game — each person keeps their consistent block colour.
   const COLORS = ['#ff5d5d','#4dabf7','#51cf66','#ffd43b','#cc5de8','#ff922b','#22b8cf','#f06595'];
-  const NAMES  = ['Red','Blue','Green','Gold','Violet','Orange'];
   const N = FACES ? Math.min(FACES.length,6) : 6;
   const imgs = FACES ? FACES.slice(0,N).map(s=>{const im=new Image(); im.src=s; return im;}) : [];
 
   const stage=document.getElementById('stage'), cv=document.getElementById('cv'), ctx=cv.getContext('2d');
-  const ov=document.getElementById('ov'), card=document.getElementById('card');
-  const $=(id)=>document.getElementById(id);
+  const ov=document.getElementById('ov'), card=document.getElementById('card'); const $=(id)=>document.getElementById(id);
   let W,H,dpr;
-  function resize(){ W=stage.clientWidth; H=stage.clientHeight; dpr=Math.min(2,window.devicePixelRatio||1);
-    cv.width=W*dpr; cv.height=H*dpr; ctx.setTransform(dpr,0,0,dpr,0,0); }
+  function resize(){ W=stage.clientWidth; H=stage.clientHeight; dpr=Math.min(2,window.devicePixelRatio||1); cv.width=W*dpr; cv.height=H*dpr; ctx.setTransform(dpr,0,0,dpr,0,0); }
   window.addEventListener('resize', resize);
 
   const ROUND=25;
-  let target, catcher, items, score, tLeft, elapsed, running, lastSpawn, lastT, raf, hits, miss;
+  let target, catcher, items, pops, score, tLeft, elapsed, running, lastSpawn, lastT, raf, hits, miss;
 
-  function drawFace(x,y,r,id,ringW,ringC){
-    ctx.save(); ctx.beginPath(); ctx.arc(x,y,r,0,Math.PI*2); ctx.closePath();
-    ctx.fillStyle=COLORS[id%COLORS.length]; ctx.fill();
-    ctx.save(); ctx.clip(); const im=imgs[id];
-    if(im && im.complete && im.naturalWidth){ ctx.drawImage(im,x-r,y-r,2*r,2*r); }
-    else { ctx.fillStyle='rgba(0,0,0,.25)'; ctx.fillRect(x-r,y-r,2*r,2*r); }
+  function roundRect(x,y,w,h,r){ ctx.beginPath(); ctx.moveTo(x+r,y); ctx.arcTo(x+w,y,x+w,y+h,r); ctx.arcTo(x+w,y+h,x,y+h,r); ctx.arcTo(x,y+h,x,y,r); ctx.arcTo(x,y,x+w,y,r); ctx.closePath(); }
+
+  // Draw a main-game style COLORED BLOCK (rounded square) with a circular face inset.
+  function drawBlock(cx,cy,r,id,isCatcher){
+    const s=r*2, x=cx-r, y=cy-r;
+    ctx.save();
+    roundRect(x,y,s,s,s*0.22); ctx.fillStyle=COLORS[id%COLORS.length]; ctx.fill();
+    ctx.save(); roundRect(x,y,s,s,s*0.22); ctx.clip();
+      const grd=ctx.createLinearGradient(0,y,0,y+s); grd.addColorStop(0,'rgba(255,255,255,.20)'); grd.addColorStop(1,'rgba(0,0,0,.20)'); ctx.fillStyle=grd; ctx.fillRect(x,y,s,s);
     ctx.restore();
-    ctx.lineWidth=ringW||3; ctx.strokeStyle=ringC||'rgba(255,255,255,.65)'; ctx.beginPath(); ctx.arc(x,y,r,0,Math.PI*2); ctx.stroke();
+    const fr=r*0.78; ctx.save(); ctx.beginPath(); ctx.arc(cx,cy,fr,0,Math.PI*2); ctx.closePath(); ctx.clip();
+      const im=imgs[id]; if(im&&im.complete&&im.naturalWidth) ctx.drawImage(im,cx-fr,cy-fr,2*fr,2*fr); else { ctx.fillStyle='rgba(0,0,0,.25)'; ctx.fillRect(cx-fr,cy-fr,2*fr,2*fr); }
+    ctx.restore();
+    ctx.lineWidth=2; ctx.strokeStyle='rgba(255,255,255,.7)'; ctx.beginPath(); ctx.arc(cx,cy,fr,0,Math.PI*2); ctx.stroke();
+    if(isCatcher){ ctx.lineWidth=3+Math.sin(performance.now()/120)*1.6; ctx.strokeStyle='#fff'; roundRect(x,y,s,s,s*0.22); ctx.stroke(); }
     ctx.restore();
   }
 
-  function setTarget(){
-    target=Math.floor(Math.random()*N);
-    $('tsw').style.background=imgs.length?`url(${FACES[target]})`:COLORS[target];
-    $('tname').textContent='your person';
-  }
+  function setTarget(){ target=Math.floor(Math.random()*N); $('tsw').style.background=imgs.length?`url(${FACES[target]})`:COLORS[target]; }
+  function popup(x,y,txt,good){ pops.push({x,y,txt,color:good?'#37d39b':'#ff5c7a',life:0.85}); }
+  function flash(){ const f=$('flash'); f.classList.remove('go'); void f.offsetWidth; f.classList.add('go'); }
 
   function start(){
     resize(); setTarget();
-    catcher={x:W/2,y:H-70,r:32}; items=[]; score=0; tLeft=ROUND; elapsed=0; running=true; lastSpawn=0; hits=0; miss=0; lastT=performance.now();
+    catcher={x:W/2,y:H-70,r:32}; items=[]; pops=[]; score=0; tLeft=ROUND; elapsed=0; running=true; lastSpawn=0; hits=0; miss=0; lastT=performance.now();
     ov.classList.add('hide'); updateHud(); cancelAnimationFrame(raf); loop();
   }
   function updateHud(){ $('time').textContent=Math.max(0,Math.ceil(tLeft)); $('bonus').textContent=score; }
-
-  function spawn(speed){
-    const id = Math.random()<0.42 ? target : Math.floor(Math.random()*N);
-    items.push({x:28+Math.random()*(W-56), y:-28, r:24, vy:speed*(0.8+Math.random()*0.5), id, dead:false});
-  }
-  function flash(){ const f=$('flash'); f.classList.remove('go'); void f.offsetWidth; f.classList.add('go'); }
+  function spawn(speed){ const id = Math.random()<0.42 ? target : Math.floor(Math.random()*N); items.push({x:28+Math.random()*(W-56), y:-28, r:24, vy:speed*(0.8+Math.random()*0.5), id, dead:false}); }
 
   function loop(){
     const now=performance.now(); const dt=Math.min(0.05,(now-lastT)/1000); lastT=now;
@@ -127,54 +122,46 @@ window.SNAP_FACES = [
       for(const it of items){ if(it.dead) continue;
         if(Math.hypot(it.x-catcher.x, it.y-catcher.y) < it.r+catcher.r-6){
           it.dead=true;
-          if(it.id===target){ score+=50; hits++; }
-          else { score=Math.max(0,score-25); miss++; flash(); }
+          if(it.id===target){ score+=50; hits++; popup(it.x,it.y,'+50',true); }
+          else { score=Math.max(0,score-25); miss++; popup(it.x,it.y,'−25',false); flash(); }
         }
       }
       items=items.filter(it=>!it.dead && it.y < H+it.r);
+      for(const p of pops){ p.y-=42*dt; p.life-=dt; }
+      pops=pops.filter(p=>p.life>0);
       if(tLeft<=0){ running=false; end(); }
       updateHud();
     }
-    // draw
     ctx.clearRect(0,0,W,H);
-    for(const it of items) drawFace(it.x,it.y,it.r,it.id);
-    // catcher with pulsing white ring
-    const pulse=3+Math.sin(performance.now()/120)*1.5;
-    drawFace(catcher.x,catcher.y,catcher.r,target,pulse,'#fff');
-    // little "TARGET" base glow
-    ctx.save(); ctx.globalAlpha=.25; ctx.fillStyle='#fff'; ctx.beginPath(); ctx.ellipse(catcher.x,catcher.y+catcher.r+6,catcher.r*0.9,6,0,0,Math.PI*2); ctx.fill(); ctx.restore();
+    for(const it of items) drawBlock(it.x,it.y,it.r,it.id,false);
+    drawBlock(catcher.x,catcher.y,catcher.r,target,true);
+    ctx.textAlign='center'; ctx.font='800 19px -apple-system,Segoe UI,Roboto,Arial';
+    for(const p of pops){ ctx.globalAlpha=Math.max(0,Math.min(1,p.life/0.85)); ctx.fillStyle=p.color; ctx.fillText(p.txt,p.x,p.y); }
+    ctx.globalAlpha=1;
     if(running) raf=requestAnimationFrame(loop);
   }
 
-  function move(clientX,clientY){
-    if(!running) return; const r=cv.getBoundingClientRect();
-    const x=clientX-r.left, y=clientY-r.top;
-    catcher.x=Math.max(catcher.r, Math.min(W-catcher.r, x));
-    catcher.y=Math.max(H-120, Math.min(H-26, y)); // vertical band ~ 1 inch
-  }
-  stage.addEventListener('pointerdown',(e)=>{ move(e.clientX,e.clientY); });
-  stage.addEventListener('pointermove',(e)=>{ if(e.pressure>0||e.buttons||e.pointerType==='touch') move(e.clientX,e.clientY); else move(e.clientX,e.clientY); });
-  window.addEventListener('keydown',(e)=>{ if(!running)return; const step=28;
-    if(e.key==='ArrowLeft') catcher.x=Math.max(catcher.r,catcher.x-step);
-    if(e.key==='ArrowRight') catcher.x=Math.min(W-catcher.r,catcher.x+step);
-    if(e.key==='ArrowUp') catcher.y=Math.max(H-120,catcher.y-step);
-    if(e.key==='ArrowDown') catcher.y=Math.min(H-26,catcher.y+step);
-  });
+  function move(clientX,clientY){ if(!running) return; const r=cv.getBoundingClientRect(); const x=clientX-r.left, y=clientY-r.top;
+    catcher.x=Math.max(catcher.r, Math.min(W-catcher.r, x)); catcher.y=Math.max(H-120, Math.min(H-26, y)); }
+  stage.addEventListener('pointerdown',(e)=>move(e.clientX,e.clientY));
+  stage.addEventListener('pointermove',(e)=>move(e.clientX,e.clientY));
+  window.addEventListener('keydown',(e)=>{ if(!running)return; const s=28;
+    if(e.key==='ArrowLeft') catcher.x=Math.max(catcher.r,catcher.x-s);
+    if(e.key==='ArrowRight') catcher.x=Math.min(W-catcher.r,catcher.x+s);
+    if(e.key==='ArrowUp') catcher.y=Math.max(H-120,catcher.y-s);
+    if(e.key==='ArrowDown') catcher.y=Math.min(H-26,catcher.y+s); });
 
   function end(){
-    const acc = (hits+miss)? Math.round(hits/(hits+miss)*100):100;
+    const acc=(hits+miss)?Math.round(hits/(hits+miss)*100):100;
     card.innerHTML = `<div class="mini" style="background:${imgs.length?`url(${FACES[target]})`:COLORS[target]}"></div>
-      <h2>Bonus complete!</h2>
-      <div class="big">+${score}</div>
+      <h2>Bonus complete!</h2><div class="big">+${score}</div>
       <p>${hits} caught · ${miss} wrong · ${acc}% accuracy<br>These points (already ×5) add to your level total, then you advance.</p>
       <button class="btn" id="again">Play again ▶</button>`;
-    ov.classList.remove('hide');
-    $('again').onclick=start;
+    ov.classList.remove('hide'); $('again').onclick=start;
   }
-  function intro(){
-    resize();
+  function intro(){ resize();
     card.innerHTML = `<h2>⚡ Bonus Round</h2>
-      <p>You connected a full line! Faces fly at you — <b style="color:#fff">slide to catch only your person</b> and dodge everyone else. Worth <b style="color:#fff">5× points</b>, and it gets faster. ~25 seconds.</p>
+      <p>You connected a full line! Your people fly at you on their colour blocks — <b style="color:#fff">slide to catch only your person</b> (<b style="color:var(--good)">+50</b>) and dodge everyone else (<b style="color:var(--warn)">−25</b>). Worth <b style="color:#fff">5× points</b>, and it speeds up. ~25 seconds.</p>
       <button class="btn" id="go">Start ▶</button>`;
     ov.classList.remove('hide'); $('go').onclick=start;
   }
