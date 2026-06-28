@@ -310,7 +310,7 @@ window.SNAP_FACES = [
   const NAMES   = ['Sam','Alex','Jordan','Riley','Casey','Quinn','Morgan','Taylor'];
 
   let people = [], protectedId = -1, level = 0;
-  const LEVELS = Array.from({length:10}, (_, i) => ({ target: 600 + i*340 + (i>4 ? i*120 : 0), moves: 18 + Math.floor(i/2)*2 }));
+  const LEVELS = [{target:1800,moves:16},{target:2000,moves:18},{target:2150,moves:20},{target:2300,moves:22},{target:2450,moves:24},{target:2600,moves:26},{target:2750,moves:28},{target:2900,moves:30},{target:3100,moves:32},{target:3300,moves:34}];
 
   // Difficulty ramp: easier early, always a path forward.
   let activeColors = N;
