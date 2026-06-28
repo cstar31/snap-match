@@ -3,7 +3,7 @@
 <head>
 <meta charset="UTF-8" />
 <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no" />
-<title>Snap Match — private match-3 prototype</title>
+<title>Snap Match — private connect puzzle</title>
 <style>
   :root {
     --bg0:#1b1030; --bg1:#2a1a4a; --panel:rgba(255,255,255,.06); --panel-b:rgba(255,255,255,.12);
@@ -26,37 +26,32 @@
   .screen.active { display:block; animation:fade .25s ease; }
   @keyframes fade { from{opacity:0; transform:translateY(6px);} to{opacity:1; transform:none;} }
 
-  /* ---- Setup ---- */
   .grid6 { display:grid; grid-template-columns:repeat(3,1fr); gap:12px; margin:14px 0; }
   .slot { position:relative; aspect-ratio:1; border-radius:18px; border:1px solid var(--panel-b);
-    background:var(--panel); display:flex; flex-direction:column; align-items:center; justify-content:center;
-    cursor:pointer; overflow:hidden; transition:transform .12s, border-color .12s; }
+    display:flex; flex-direction:column; align-items:center; justify-content:center;
+    cursor:pointer; overflow:hidden; transition:transform .12s; }
   .slot:active { transform:scale(.97); }
   .slot .face { width:64px; height:64px; border-radius:50%; background-size:cover; background-position:center;
-    display:flex; align-items:center; justify-content:center; font-weight:700; font-size:1.5rem; color:#fff;
-    box-shadow:0 4px 14px rgba(0,0,0,.35); }
-  .slot .name { font-size:.7rem; color:var(--muted); margin-top:7px; max-width:90%; overflow:hidden;
-    text-overflow:ellipsis; white-space:nowrap; text-align:center; }
+    display:flex; align-items:center; justify-content:center; font-weight:800; font-size:1.4rem; color:#fff;
+    box-shadow:inset 0 0 0 3px rgba(255,255,255,.6), 0 4px 14px rgba(0,0,0,.35); }
   .slot .shield { position:absolute; top:7px; right:7px; width:26px; height:26px; border-radius:50%;
-    display:flex; align-items:center; justify-content:center; font-size:.8rem; background:rgba(0,0,0,.35);
-    border:1px solid var(--panel-b); }
-  .slot.protected { border-color:var(--gold); box-shadow:0 0 0 1px var(--gold) inset, 0 6px 18px rgba(255,210,74,.15); }
+    display:flex; align-items:center; justify-content:center; font-size:.8rem; background:rgba(0,0,0,.45);
+    border:1px solid rgba(255,255,255,.5); }
+  .slot.protected { box-shadow:0 0 0 3px var(--gold) inset, 0 6px 18px rgba(255,210,74,.25); }
   .slot.protected .shield { background:var(--gold); color:#3a2a00; }
-  .slot .hint { position:absolute; bottom:6px; font-size:.6rem; color:var(--muted); }
+  .slot .hint { position:absolute; bottom:6px; font-size:.6rem; color:#fff; text-shadow:0 1px 3px rgba(0,0,0,.6); }
 
   .row { display:flex; gap:10px; }
   button.btn { flex:1; border:none; border-radius:14px; padding:13px 14px; font-size:.95rem; font-weight:650;
     cursor:pointer; color:#fff; background:linear-gradient(135deg,var(--accent),var(--accent2));
-    box-shadow:0 8px 22px rgba(124,92,255,.3); transition:transform .12s, opacity .12s; }
+    box-shadow:0 8px 22px rgba(124,92,255,.3); transition:transform .12s; }
   button.btn:active { transform:scale(.98); }
   button.btn.ghost { background:var(--panel); border:1px solid var(--panel-b); box-shadow:none; color:var(--txt); }
   button.btn.danger { background:var(--panel); border:1px solid rgba(255,92,108,.4); color:#ff97a3; box-shadow:none; }
-  button.btn[disabled] { opacity:.45; cursor:not-allowed; }
   .help { font-size:.74rem; color:var(--muted); line-height:1.45; margin-top:14px;
     background:var(--panel); border:1px solid var(--panel-b); border-radius:12px; padding:11px 13px; }
   .help b { color:var(--txt); }
 
-  /* ---- Game HUD ---- */
   .hud { display:grid; grid-template-columns:repeat(3,1fr); gap:8px; margin:6px 0 12px; }
   .stat { background:var(--panel); border:1px solid var(--panel-b); border-radius:12px; padding:8px; text-align:center; }
   .stat .k { font-size:.62rem; color:var(--muted); text-transform:uppercase; letter-spacing:.5px; }
@@ -65,38 +60,41 @@
   .progress > i { display:block; height:100%; width:0; background:linear-gradient(90deg,var(--good),var(--accent)); transition:width .3s; }
   .protbar { display:flex; align-items:center; gap:9px; font-size:.76rem; color:var(--muted); margin-bottom:10px; }
   .protbar .face { width:30px; height:30px; border-radius:50%; background-size:cover; background-position:center;
-    display:flex; align-items:center; justify-content:center; font-weight:700; font-size:.8rem; border:2px solid var(--gold); }
+    display:flex; align-items:center; justify-content:center; font-weight:700; font-size:.8rem; border:2px solid var(--gold); color:#fff; }
 
-  /* ---- Board ---- */
+  /* ---- Board: each tile is a COLORED BLOCK with a circular face inset ---- */
   .board-wrap { position:relative; }
-  .board { display:grid; gap:var(--tile-gap); background:var(--panel); border:1px solid var(--panel-b);
-    border-radius:18px; padding:var(--tile-gap); touch-action:none; user-select:none; }
-  .tile { position:relative; aspect-ratio:1; border-radius:50%; background:#2a1a4a; cursor:pointer;
-    display:flex; align-items:center; justify-content:center; font-weight:700; color:#fff;
-    background-size:cover; background-position:center; box-shadow:0 3px 8px rgba(0,0,0,.3);
-    transition:transform .14s ease, opacity .14s ease; }
-  .tile.sel { transform:scale(1.12); box-shadow:0 0 0 3px var(--accent), 0 6px 16px rgba(124,92,255,.5); z-index:2; }
+  .board { display:grid; gap:var(--tile-gap);
+    background:linear-gradient(160deg, rgba(124,92,255,.18), rgba(255,92,168,.14));
+    border:1px solid var(--panel-b); border-radius:18px; padding:var(--tile-gap); touch-action:none; user-select:none; }
+  .tile { position:relative; aspect-ratio:1; border-radius:14px; cursor:pointer;
+    box-shadow:0 3px 8px rgba(0,0,0,.3), inset 0 2px 6px rgba(255,255,255,.18), inset 0 -3px 8px rgba(0,0,0,.18);
+    transition:transform .12s ease, opacity .14s ease; }
+  .tile .pic { position:absolute; inset:15%; border-radius:50%; background-size:cover; background-position:center;
+    display:flex; align-items:center; justify-content:center; font-weight:800; color:#fff; font-size:1rem;
+    box-shadow:inset 0 0 0 2px rgba(255,255,255,.6), 0 1px 4px rgba(0,0,0,.35); }
+  .tile .mark { position:absolute; bottom:-3px; right:-3px; width:40%; height:40%; border-radius:50%;
+    display:none; align-items:center; justify-content:center; font-size:.62em; background:#15102a; border:1px solid var(--panel-b); }
+  .tile.link { transform:scale(1.1); outline:3px solid #fff; outline-offset:-3px; z-index:2; }
+  .tile.ok   { outline:3px solid var(--good); outline-offset:-3px; }
   .tile.clearing { transform:scale(0); opacity:0; }
   .tile.fall { animation:drop .22s ease; }
   @keyframes drop { from{ transform:translateY(-22px); opacity:.4;} to{ transform:none; opacity:1;} }
-  .tile.protected { box-shadow:0 0 0 3px var(--gold), 0 3px 10px rgba(0,0,0,.35); }
-  .tile .mark { position:absolute; bottom:-2px; right:-2px; width:42%; height:42%; border-radius:50%;
-    display:flex; align-items:center; justify-content:center; font-size:.7em; background:#15102a;
-    border:1px solid var(--panel-b); }
+  .tile.protected { outline:3px solid var(--gold); outline-offset:-3px; }
   .tile.blast { box-shadow:0 0 0 3px var(--warn), 0 0 14px rgba(255,180,84,.6); }
-  .tile.bomb { box-shadow:0 0 0 3px var(--accent2), 0 0 16px rgba(255,92,168,.6); }
+  .tile.bomb  { box-shadow:0 0 0 3px var(--accent2), 0 0 16px rgba(255,92,168,.6); }
 
   .toast { position:absolute; left:50%; top:14px; transform:translateX(-50%); background:rgba(20,12,40,.92);
     border:1px solid var(--panel-b); padding:8px 14px; border-radius:99px; font-size:.8rem; font-weight:600;
-    opacity:0; pointer-events:none; transition:opacity .2s, transform .2s; white-space:nowrap; z-index:5; }
+    opacity:0; pointer-events:none; transition:opacity .15s, transform .15s; white-space:nowrap; z-index:5; }
   .toast.show { opacity:1; transform:translateX(-50%) translateY(4px); }
   .toast.warn { color:var(--warn); border-color:rgba(255,180,84,.5); }
+  .toast.good { color:var(--good); border-color:rgba(55,211,155,.5); }
 
   .legend { display:flex; flex-wrap:wrap; gap:8px 14px; font-size:.72rem; color:var(--muted); margin:12px 2px; }
   .legend span b { color:var(--txt); }
 
-  .overlay { position:fixed; inset:0; background:rgba(10,6,22,.78); display:none; align-items:center;
-    justify-content:center; padding:20px; z-index:20; }
+  .overlay { position:fixed; inset:0; background:rgba(10,6,22,.78); display:none; align-items:center; justify-content:center; padding:20px; z-index:20; }
   .overlay.show { display:flex; animation:fade .2s ease; }
   .card { width:100%; max-width:360px; background:linear-gradient(160deg,#241640,#1a1030);
     border:1px solid var(--panel-b); border-radius:20px; padding:22px; text-align:center; }
@@ -111,27 +109,23 @@
   <header>
     <span class="badge-private">🔒 100% on-device · nothing uploaded</span>
     <h1>Snap Match</h1>
-    <div class="tag">A private match-3 where your favorite people are the game pieces.</div>
+    <div class="tag">Connect your favorite people to clear them.</div>
   </header>
 
-  <!-- ===================== SETUP ===================== -->
   <section id="setup" class="screen active">
     <div class="grid6" id="slots"></div>
     <div class="row" style="margin-bottom:10px;">
       <button class="btn ghost" id="btnSample">Reset to default faces</button>
       <button class="btn" id="btnStart">Start game →</button>
     </div>
-    <div class="row">
-      <button class="btn danger" id="btnReset">Delete all faces</button>
-    </div>
+    <div class="row"><button class="btn danger" id="btnReset">Delete all faces</button></div>
     <div class="help">
-      <b>Tap a tile</b> to swap in your own photo (it never leaves this device — cropping happens right here in your browser).
-      Tap the <b>🛡 shield</b> on one person to make them your <b>protected friend</b>: match the others, but
-      <b>avoid matching them</b> or you lose points. The board comes pre-loaded with faces — just hit <b>Start</b>.
+      <b>Drag across 3 or more of the same person</b> — straight lines or L-shapes — to connect and clear them.
+      Each person sits on their own <b>colored block</b> so groups are easy to spot. Longer chains build power-ups.
+      Tap the <b>🛡 shield</b> to set a <b>protected friend</b> — connecting them costs points. Just hit <b>Start</b>.
     </div>
   </section>
 
-  <!-- ===================== GAME ===================== -->
   <section id="game" class="screen">
     <div class="hud">
       <div class="stat"><div class="k">Level</div><div class="v" id="hLevel">1</div></div>
@@ -145,9 +139,9 @@
       <div class="toast" id="toast"></div>
     </div>
     <div class="legend">
-      <span><b>Match 4</b> → ✨ Selfie Blast (clears a line)</span>
-      <span><b>Match 5</b> → 💬 Group Chat Bomb (clears one friend)</span>
-      <span><b>🛡 Protected</b> → don't match them</span>
+      <span><b>Connect 4</b> → ✨ Selfie Blast (clears a line)</span>
+      <span><b>Connect 5+</b> → 💬 Group Chat Bomb (clears one friend)</span>
+      <span><b>🛡 Protected</b> → costs points</span>
     </div>
     <div class="bottombar">
       <button class="btn ghost" id="btnRestart">Restart level</button>
@@ -156,7 +150,6 @@
   </section>
 </div>
 
-<!-- overlay for win/lose -->
 <div class="overlay" id="overlay">
   <div class="card">
     <h2 id="ovTitle">Level cleared!</h2>
@@ -170,91 +163,88 @@
 
 <script>
 /*
- * core.js — Pure, DOM-free match-3 engine.
+ * core.js — Pure, DOM-free engine for a CONNECT match-3.
  *
- * Works on a 2D grid of "cells". A cell is either null (empty) or an object
- * with at least an `id` (the person index) and an optional `special`:
- *   - null      : ordinary face tile
- *   - 'blast'   : Selfie Blast (clears its full row + column)
- *   - 'bomb'    : Group Chat Bomb (clears every tile of one person)
- *
- * The engine ignores any other cell properties (e.g. `el` DOM node), so the
- * same functions power both the browser UI and the Node unit tests.
+ * Players clear tiles by connecting a chain of 3+ orthogonally-adjacent tiles
+ * of the SAME person. A board is "alive" while at least one connected group of
+ * 3+ identical tiles exists. Cells: null | { id, special:null|'blast'|'bomb' }.
  */
 (function (global) {
   'use strict';
-
   function cid(cell) { return cell == null ? null : cell.id; }
+  function areAdjacent(a, b) { return Math.abs(a[0] - b[0]) + Math.abs(a[1] - b[1]) === 1; }
 
-  function findMatches(grid) {
-    const R = grid.length, C = grid[0].length;
-    const matched = {};
-    const runs = [];
-
-    function close(cells, len, dir, id) {
-      if (id == null || len < 3) return;
-      runs.push({ cells: cells.slice(), len, dir, id });
-      for (const [r, c] of cells) matched[r + ',' + c] = true;
-    }
-
-    for (let r = 0; r < R; r++) {
-      let start = 0;
-      for (let c = 1; c <= C; c++) {
-        const same = c < C && cid(grid[r][c]) != null && cid(grid[r][c]) === cid(grid[r][start]);
-        if (!same) {
-          const cells = [];
-          for (let k = start; k < c; k++) cells.push([r, k]);
-          close(cells, c - start, 'h', cid(grid[r][start]));
-          start = c;
-        }
-      }
-    }
-    for (let c = 0; c < C; c++) {
-      let start = 0;
-      for (let r = 1; r <= R; r++) {
-        const same = r < R && cid(grid[r][c]) != null && cid(grid[r][c]) === cid(grid[start][c]);
-        if (!same) {
-          const cells = [];
-          for (let k = start; k < r; k++) cells.push([k, c]);
-          close(cells, r - start, 'v', cid(grid[start][c]));
-          start = r;
-        }
-      }
-    }
-
-    const cells = Object.keys(matched).map((s) => s.split(',').map(Number));
-    return { cells, runs };
+  function neighbors(r, c, R, C) {
+    const out = [];
+    if (r > 0) out.push([r - 1, c]);
+    if (r < R - 1) out.push([r + 1, c]);
+    if (c > 0) out.push([r, c - 1]);
+    if (c < C - 1) out.push([r, c + 1]);
+    return out;
   }
 
-  function hasMatch(grid) {
-    return findMatches(grid).cells.length > 0;
+  // Flood-fill the connected same-id region containing (sr,sc).
+  function componentAt(grid, sr, sc, seen) {
+    const R = grid.length, C = grid[0].length;
+    const id = cid(grid[sr][sc]);
+    if (id == null) return [];
+    const stack = [[sr, sc]], comp = [];
+    seen[sr + ',' + sc] = true;
+    while (stack.length) {
+      const [r, c] = stack.pop(); comp.push([r, c]);
+      for (const [nr, nc] of neighbors(r, c, R, C)) {
+        const k = nr + ',' + nc;
+        if (!seen[k] && cid(grid[nr][nc]) === id) { seen[k] = true; stack.push([nr, nc]); }
+      }
+    }
+    return comp;
   }
 
-  function expandClears(grid, startCells) {
-    const R = grid.length, C = grid[0].length;
-    const inSet = {};
-    const work = [];
-    for (const [r, c] of startCells) {
+  // All connected same-id groups with size >= min (default 3).
+  function allGroups(grid, min) {
+    min = min || 3;
+    const R = grid.length, C = grid[0].length, seen = {}, groups = [];
+    for (let r = 0; r < R; r++) for (let c = 0; c < C; c++) {
       const k = r + ',' + c;
-      if (!inSet[k]) { inSet[k] = true; work.push([r, c]); }
+      if (!seen[k] && grid[r][c] != null) {
+        const comp = componentAt(grid, r, c, seen);
+        if (comp.length >= min) groups.push(comp);
+      }
     }
+    return groups;
+  }
+  function hasClearableGroup(grid, min) { return allGroups(grid, min).length > 0; }
+  function countClearableGroups(grid, min) { return allGroups(grid, min).length; }
+
+  // Is an ordered list of cells a legal chain? (>=min, same id, each step
+  // orthogonally adjacent to the previous, no repeats.)
+  function isValidChain(grid, cells, min) {
+    min = min || 3;
+    if (!cells || cells.length < min) return false;
+    const id = cid(grid[cells[0][0]][cells[0][1]]);
+    if (id == null) return false;
+    const seen = {};
+    for (let i = 0; i < cells.length; i++) {
+      const [r, c] = cells[i], k = r + ',' + c;
+      if (seen[k]) return false;
+      seen[k] = true;
+      if (cid(grid[r][c]) !== id) return false;
+      if (i > 0 && !areAdjacent(cells[i - 1], cells[i])) return false;
+    }
+    return true;
+  }
+
+  // Expand a set of cells to include special-tile area-of-effect (chained).
+  function expandClears(grid, startCells) {
+    const R = grid.length, C = grid[0].length, inSet = {}, work = [];
+    for (const [r, c] of startCells) { const k = r + ',' + c; if (!inSet[k]) { inSet[k] = true; work.push([r, c]); } }
     while (work.length) {
-      const [r, c] = work.pop();
-      const cell = grid[r][c];
+      const [r, c] = work.pop(), cell = grid[r][c];
       if (!cell || !cell.special) continue;
       const extra = [];
-      if (cell.special === 'blast') {
-        for (let i = 0; i < C; i++) extra.push([r, i]);
-        for (let i = 0; i < R; i++) extra.push([i, c]);
-      } else if (cell.special === 'bomb') {
-        for (let i = 0; i < R; i++)
-          for (let j = 0; j < C; j++)
-            if (cid(grid[i][j]) === cell.id) extra.push([i, j]);
-      }
-      for (const [er, ec] of extra) {
-        const k = er + ',' + ec;
-        if (!inSet[k]) { inSet[k] = true; work.push([er, ec]); }
-      }
+      if (cell.special === 'blast') { for (let i = 0; i < C; i++) extra.push([r, i]); for (let i = 0; i < R; i++) extra.push([i, c]); }
+      else if (cell.special === 'bomb') { for (let i = 0; i < R; i++) for (let j = 0; j < C; j++) if (cid(grid[i][j]) === cell.id) extra.push([i, j]); }
+      for (const [er, ec] of extra) { const k = er + ',' + ec; if (!inSet[k]) { inSet[k] = true; work.push([er, ec]); } }
     }
     return Object.keys(inSet).map((s) => s.split(',').map(Number));
   }
@@ -263,30 +253,23 @@
     const R = grid.length, C = grid[0].length;
     for (let c = 0; c < C; c++) {
       let write = R - 1;
-      for (let r = R - 1; r >= 0; r--) {
-        if (grid[r][c] != null) {
-          grid[write][c] = grid[r][c];
-          if (write !== r) grid[r][c] = null;
-          write--;
-        }
-      }
+      for (let r = R - 1; r >= 0; r--) { if (grid[r][c] != null) { grid[write][c] = grid[r][c]; if (write !== r) grid[r][c] = null; write--; } }
       for (let r = write; r >= 0; r--) grid[r][c] = null;
     }
     return grid;
   }
 
-  function swapInPlace(grid, a, b) {
-    const t = grid[a[0]][a[1]];
-    grid[a[0]][a[1]] = grid[b[0]][b[1]];
-    grid[b[0]][b[1]] = t;
+  function reshuffle(grid, rng) {
+    rng = rng || Math.random;
+    const R = grid.length, C = grid[0].length, ids = [];
+    for (let r = 0; r < R; r++) for (let c = 0; c < C; c++) if (grid[r][c]) ids.push(grid[r][c].id);
+    for (let i = ids.length - 1; i > 0; i--) { const j = Math.floor(rng() * (i + 1)); const t = ids[i]; ids[i] = ids[j]; ids[j] = t; }
+    let k = 0;
+    for (let r = 0; r < R; r++) for (let c = 0; c < C; c++) if (grid[r][c]) { grid[r][c].id = ids[k++]; grid[r][c].special = null; }
+    return grid;
   }
 
-  function areAdjacent(a, b) {
-    return Math.abs(a[0] - b[0]) + Math.abs(a[1] - b[1]) === 1;
-  }
-
-  const api = { findMatches, hasMatch, expandClears, collapse, swapInPlace, areAdjacent, cid };
-
+  const api = { cid, areAdjacent, componentAt, allGroups, hasClearableGroup, countClearableGroups, isValidChain, expandClears, collapse, reshuffle };
   if (typeof module !== 'undefined' && module.exports) module.exports = api;
   else global.FaceMatchCore = api;
 })(typeof window !== 'undefined' ? window : globalThis);
@@ -308,340 +291,244 @@ window.SNAP_FACES = [
 (function () {
   'use strict';
   const Core = window.FaceMatchCore;
-  const ROWS = 8, COLS = 8, N = 6; // 8x8 board, 6 people
-  const SAVE_KEY = 'snapmatch.v1';
+  const ROWS = 8, COLS = 8, N = 6, MIN_CONNECT = 3;
+  const SAVE_KEY = 'snapmatch.v2';
 
-  const PALETTE = ['#ff6b6b','#4dabf7','#51cf66','#ffd43b','#cc5de8','#22b8cf','#ff922b','#94d82d'];
-  const NAMES = ['Sam','Alex','Jordan','Riley','Casey','Quinn','Morgan','Taylor'];
+  const PALETTE = ['#ff5d5d','#4dabf7','#51cf66','#ffd43b','#cc5de8','#ff922b','#22b8cf','#f06595'];
+  const NAMES   = ['Sam','Alex','Jordan','Riley','Casey','Quinn','Morgan','Taylor'];
 
-  let people = [];        // [{img, color, label}]
-  let protectedId = -1;
-  let level = 0;
-  const LEVELS = Array.from({length:10}, (_, i) => ({
-    target: 600 + i*340 + (i>4 ? i*120 : 0),
-    moves: 18 + Math.floor(i/2)*2,
-  }));
+  let people = [], protectedId = -1, level = 0;
+  const LEVELS = Array.from({length:10}, (_, i) => ({ target: 600 + i*340 + (i>4 ? i*120 : 0), moves: 18 + Math.floor(i/2)*2 }));
 
-  let grid = [];
-  let score = 0, movesLeft = 0, busy = false, selected = null;
-  let tileEls = [];
+  // Difficulty ramp: easier early, always a path forward.
+  let activeColors = N;
+  const colorsForLevel   = (l) => Math.min(N, 4 + Math.floor(l / 2));  // L1-2:4 faces, L3-4:5, L5+:6
+  const minGroupsForLevel = (l) => Math.max(1, 6 - Math.floor(l / 2)); // many groups early -> 1 late
 
-  // ===== persistence =====
-  function save() {
-    try { localStorage.setItem(SAVE_KEY, JSON.stringify({ people, protectedId, level })); }
-    catch (e) {}
-  }
+  let grid = [], score = 0, movesLeft = 0, busy = false, tileEls = [];
+
+  function save() { try { localStorage.setItem(SAVE_KEY, JSON.stringify({ people, protectedId, level })); } catch (e) {} }
   function load() {
-    try {
-      const raw = localStorage.getItem(SAVE_KEY);
-      if (!raw) return false;
-      const d = JSON.parse(raw);
-      people = d.people || []; protectedId = d.protectedId ?? -1; level = d.level || 0;
-      return people.length === N;
-    } catch (e) { return false; }
+    try { const raw = localStorage.getItem(SAVE_KEY); if (!raw) return false;
+      const d = JSON.parse(raw); people = d.people || []; protectedId = d.protectedId ?? -1; level = d.level || 0;
+      return people.length === N; } catch (e) { return false; }
   }
-
   function makeSamplePeople() {
-    const idx = [...Array(8).keys()].sort(() => Math.random() - 0.5).slice(0, N);
-    people = idx.map((i) => ({ img: null, color: PALETTE[i], label: NAMES[i][0] }));
+    people = Array.from({length:N}, (_, i) => ({ img: null, color: PALETTE[i], label: NAMES[i][0] }));
     if (protectedId < 0 || protectedId >= N) protectedId = -1;
   }
-
-  // Use the bundled real faces (js/faces.js) if present; otherwise sample avatars.
   function useDefaultPeople() {
-    if (window.SNAP_FACES && window.SNAP_FACES.length >= N) {
+    if (window.SNAP_FACES && window.SNAP_FACES.length >= N)
       people = window.SNAP_FACES.slice(0, N).map((img, i) => ({ img, color: PALETTE[i], label: NAMES[i][0] }));
-    } else {
-      makeSamplePeople();
-    }
+    else makeSamplePeople();
   }
 
-  // ===== SETUP screen =====
   const slotsEl = document.getElementById('slots');
   function renderSetup() {
     slotsEl.innerHTML = '';
     people.forEach((p, i) => {
       const slot = document.createElement('div');
       slot.className = 'slot' + (i === protectedId ? ' protected' : '');
-      const face = document.createElement('div');
-      face.className = 'face';
-      if (p.img) { face.style.backgroundImage = `url(${p.img})`; }
-      else { face.style.background = p.color; face.textContent = p.label; }
-      const shield = document.createElement('div');
-      shield.className = 'shield'; shield.textContent = '🛡';
-      shield.title = 'Make protected friend';
+      slot.style.background = p.color;
+      const face = document.createElement('div'); face.className = 'face';
+      if (p.img) face.style.backgroundImage = `url(${p.img})`;
+      else { face.style.background = 'rgba(0,0,0,.25)'; face.textContent = p.label; }
+      const shield = document.createElement('div'); shield.className = 'shield'; shield.textContent = '🛡';
       shield.onclick = (e) => { e.stopPropagation(); protectedId = (protectedId === i ? -1 : i); renderSetup(); save(); };
-      const hint = document.createElement('div');
-      hint.className = 'hint'; hint.textContent = 'tap to add photo';
-      slot.append(face, shield, hint);
-      slot.onclick = () => pickPhoto(i);
-      slotsEl.appendChild(slot);
+      const hint = document.createElement('div'); hint.className = 'hint'; hint.textContent = 'tap to add photo';
+      slot.append(face, shield, hint); slot.onclick = () => pickPhoto(i); slotsEl.appendChild(slot);
     });
   }
 
-  // ===== on-device photo pick + circular crop (no upload) =====
   const fileInput = document.getElementById('fileInput');
   let pickTarget = -1;
   function pickPhoto(i) { pickTarget = i; fileInput.value = ''; fileInput.click(); }
   fileInput.onchange = () => {
-    const f = fileInput.files && fileInput.files[0];
-    if (!f) return;
+    const f = fileInput.files && fileInput.files[0]; if (!f) return;
     const reader = new FileReader();
-    reader.onload = () => {
-      const img = new Image();
+    reader.onload = () => { const img = new Image();
       img.onload = () => {
-        const S = 128, cv = document.createElement('canvas');
-        cv.width = cv.height = S;
-        const ctx = cv.getContext('2d');
+        const S = 128, cv = document.createElement('canvas'); cv.width = cv.height = S; const ctx = cv.getContext('2d');
         ctx.save(); ctx.beginPath(); ctx.arc(S/2, S/2, S/2, 0, Math.PI*2); ctx.clip();
         const side = Math.min(img.width, img.height);
-        const sx = (img.width - side)/2, sy = (img.height - side)/2;
-        ctx.drawImage(img, sx, sy, side, side, 0, 0, S, S);
-        ctx.restore();
-        people[pickTarget].img = cv.toDataURL('image/jpeg', 0.85);
-        renderSetup(); save();
-      };
-      img.src = reader.result;
-    };
-    reader.readAsDataURL(f); // local read only — never sent anywhere
+        ctx.drawImage(img, (img.width-side)/2, (img.height-side)/2, side, side, 0, 0, S, S); ctx.restore();
+        people[pickTarget].img = cv.toDataURL('image/jpeg', 0.85); renderSetup(); save();
+      }; img.src = reader.result;
+    }; reader.readAsDataURL(f);
   };
 
   document.getElementById('btnSample').onclick = () => { useDefaultPeople(); renderSetup(); save(); };
   document.getElementById('btnReset').onclick = () => {
     if (!confirm('Delete all faces and saved progress from this device?')) return;
     try { localStorage.removeItem(SAVE_KEY); } catch (e) {}
-    protectedId = -1; level = 0; makeSamplePeople(); renderSetup();
-    toast('All faces deleted from this device');
+    protectedId = -1; level = 0; makeSamplePeople(); renderSetup(); toast('All faces deleted from this device');
   };
   document.getElementById('btnStart').onclick = () => startLevel(level);
   document.getElementById('btnSetup').onclick = () => showScreen('setup');
   document.getElementById('btnRestart').onclick = () => startLevel(level);
+  function showScreen(id) { document.querySelectorAll('.screen').forEach((s) => s.classList.toggle('active', s.id === id)); }
 
-  function showScreen(id) {
-    document.querySelectorAll('.screen').forEach((s) => s.classList.toggle('active', s.id === id));
-  }
-
-  // ===== board helpers =====
   const boardEl = document.getElementById('board');
   function buildBoardDOM() {
-    boardEl.style.gridTemplateColumns = `repeat(${COLS},1fr)`;
-    boardEl.innerHTML = '';
-    tileEls = [];
-    for (let r = 0; r < ROWS; r++) {
-      const row = [];
+    boardEl.style.gridTemplateColumns = `repeat(${COLS},1fr)`; boardEl.innerHTML = ''; tileEls = [];
+    for (let r = 0; r < ROWS; r++) { const row = [];
       for (let c = 0; c < COLS; c++) {
-        const t = document.createElement('div');
-        t.className = 'tile'; t.dataset.r = r; t.dataset.c = c;
-        boardEl.appendChild(t); row.push(t);
-      }
-      tileEls.push(row);
+        const t = document.createElement('div'); t.className = 'tile'; t.dataset.r = r; t.dataset.c = c;
+        const pic = document.createElement('div'); pic.className = 'pic';
+        const mark = document.createElement('div'); mark.className = 'mark';
+        t.append(pic, mark); boardEl.appendChild(t); row.push(t);
+      } tileEls.push(row);
     }
   }
 
-  const randId = () => Math.floor(Math.random() * N);
-
+  const randId = () => Math.floor(Math.random() * activeColors);
+  function cloneGrid(g) { return g.map((row) => row.map((cell) => cell ? { id: cell.id, special: cell.special } : null)); }
+  function buildRandomGrid() {
+    grid = []; for (let r = 0; r < ROWS; r++) { const row = [];
+      for (let c = 0; c < COLS; c++) row.push({ id: randId(), special: null }); grid.push(row); }
+  }
+  // Seed a board with at least minGroupsForLevel(level) connectable groups (easier early).
   function newGrid() {
-    grid = [];
-    for (let r = 0; r < ROWS; r++) {
-      const row = [];
-      for (let c = 0; c < COLS; c++) {
-        let id;
-        do { id = randId(); }
-        while (
-          (c >= 2 && row[c-1].id === id && row[c-2].id === id) ||
-          (r >= 2 && grid[r-1][c].id === id && grid[r-2][c].id === id)
-        );
-        row.push({ id, special: null });
-      }
-      grid.push(row);
+    const need = minGroupsForLevel(level); let best = null, bestCount = -1;
+    for (let attempt = 0; attempt < 120; attempt++) {
+      buildRandomGrid(); const m = Core.countClearableGroups(grid, MIN_CONNECT);
+      if (m > bestCount) { bestCount = m; best = cloneGrid(grid); }
+      if (m >= need) break;
     }
+    grid = best;
   }
 
   function paintTile(r, c, drop) {
-    const cell = grid[r][c], t = tileEls[r][c];
-    t.className = 'tile';
-    t.style.backgroundImage = ''; t.style.background = ''; t.textContent = '';
+    const cell = grid[r][c], t = tileEls[r][c], pic = t.children[0], mark = t.children[1];
+    t.className = 'tile'; t.style.background = ''; pic.style.backgroundImage = ''; pic.textContent = ''; mark.style.display = 'none';
     if (!cell) { t.style.opacity = '0'; return; }
-    t.style.opacity = '1';
-    const p = people[cell.id];
-    if (p.img) t.style.backgroundImage = `url(${p.img})`;
-    else { t.style.background = p.color; t.textContent = p.label; }
+    t.style.opacity = '1'; const p = people[cell.id];
+    t.style.background = p.color;
+    if (p.img) pic.style.backgroundImage = `url(${p.img})`; else pic.textContent = p.label;
     if (cell.id === protectedId) t.classList.add('protected');
-    if (cell.special === 'blast') { t.classList.add('blast'); addMark(t, '✨'); }
-    if (cell.special === 'bomb') { t.classList.add('bomb'); addMark(t, '💬'); }
-    if (drop) { t.classList.add('fall'); }
+    if (cell.special === 'blast') { t.classList.add('blast'); mark.textContent = '✨'; mark.style.display = 'flex'; }
+    if (cell.special === 'bomb')  { t.classList.add('bomb');  mark.textContent = '💬'; mark.style.display = 'flex'; }
+    if (drop) t.classList.add('fall');
   }
-  function addMark(t, ch) { const m = document.createElement('div'); m.className = 'mark'; m.textContent = ch; t.appendChild(m); }
+  function render(dropAll) { for (let r = 0; r < ROWS; r++) for (let c = 0; c < COLS; c++) paintTile(r, c, dropAll); }
 
-  function render(dropAll) {
-    for (let r = 0; r < ROWS; r++) for (let c = 0; c < COLS; c++) paintTile(r, c, dropAll);
-  }
-
-  // ===== HUD =====
   const $ = (id) => document.getElementById(id);
   function updateHUD() {
     const L = LEVELS[level];
-    $('hLevel').textContent = level + 1;
-    $('hScore').textContent = score;
-    $('hMoves').textContent = movesLeft;
+    $('hLevel').textContent = level + 1; $('hScore').textContent = score; $('hMoves').textContent = movesLeft;
     $('hBar').style.width = Math.min(100, (score / L.target) * 100) + '%';
     const pb = $('protBar');
-    if (protectedId >= 0) {
-      const p = people[protectedId];
+    if (protectedId >= 0) { const p = people[protectedId];
       const style = p.img ? `background-image:url(${p.img})` : `background:${p.color}`;
-      const label = p.img ? '' : p.label;
-      pb.innerHTML = `<div class="face" style="${style}">${label}</div> Protect this friend — reach <b style="color:var(--txt)">&nbsp;${LEVELS[level].target}&nbsp;</b> pts without matching them.`;
-    } else {
-      pb.innerHTML = `Reach <b style="color:var(--txt)">&nbsp;${LEVELS[level].target}&nbsp;</b> points before you run out of moves.`;
-    }
+      pb.innerHTML = `<div class="face" style="${style}">${p.img ? '' : p.label}</div> Protect this friend — reach <b style="color:var(--txt)">&nbsp;${L.target}&nbsp;</b> pts without connecting them.`;
+    } else { pb.innerHTML = `Reach <b style="color:var(--txt)">&nbsp;${L.target}&nbsp;</b> points before you run out of moves.`; }
   }
 
-  // ===== toast =====
   let toastTimer = null;
-  function toast(msg, warn) {
+  function toast(msg, kind) {
     const el = $('toast'); el.textContent = msg;
-    el.className = 'toast show' + (warn ? ' warn' : '');
-    clearTimeout(toastTimer);
-    toastTimer = setTimeout(() => { el.className = 'toast'; }, 1400);
+    el.className = 'toast show' + (kind ? ' ' + kind : '');
+    clearTimeout(toastTimer); toastTimer = setTimeout(() => { el.className = 'toast'; }, 1300);
   }
 
-  // ===== level flow =====
   function startLevel(idx) {
     level = Math.max(0, Math.min(LEVELS.length - 1, idx));
-    score = 0; movesLeft = LEVELS[level].moves; selected = null; busy = false;
-    newGrid();
-    buildBoardDOM();
-    render(true);
-    updateHUD();
-    showScreen('game');
-    save();
+    activeColors = colorsForLevel(level);
+    score = 0; movesLeft = LEVELS[level].moves; busy = false; chain = [];
+    newGrid(); buildBoardDOM(); render(true); updateHUD(); showScreen('game'); save();
   }
 
-  // ===== input =====
-  let pdStart = null, swappedThisGesture = false, suppressClick = false;
+  // ===== drag-to-connect input =====
+  let chain = [], dragging = false;
   function tileFromPoint(x, y) {
-    const el = document.elementFromPoint(x, y);
-    if (!el) return null;
-    const t = el.closest && el.closest('.tile');
-    if (!t || !boardEl.contains(t)) return null;
+    const el = document.elementFromPoint(x, y); if (!el) return null;
+    const t = el.closest && el.closest('.tile'); if (!t || !boardEl.contains(t)) return null;
     return [parseInt(t.dataset.r), parseInt(t.dataset.c)];
   }
+  const sameCell = (a, b) => a[0] === b[0] && a[1] === b[1];
+  function inChain(cell) { return chain.some((x) => sameCell(x, cell)); }
+  function chainId() { return chain.length ? grid[chain[0][0]][chain[0][1]].id : null; }
+
+  function paintChain() {
+    render(false);
+    const ok = chain.length >= MIN_CONNECT;
+    for (const [r, c] of chain) { const t = tileEls[r][c]; if (t) { t.classList.add('link'); if (ok) t.classList.add('ok'); } }
+    if (chain.length) toast(chain.length >= MIN_CONNECT ? `${chain.length} linked ✓` : `${chain.length} linked — need ${MIN_CONNECT}`, ok ? 'good' : '');
+  }
+
   boardEl.addEventListener('pointerdown', (e) => {
     if (busy) return;
-    pdStart = tileFromPoint(e.clientX, e.clientY);
-    swappedThisGesture = false;
+    const cell = tileFromPoint(e.clientX, e.clientY); if (!cell) return;
+    dragging = true; chain = [cell]; paintChain();
+    if (e.pointerId != null && boardEl.setPointerCapture) { try { boardEl.setPointerCapture(e.pointerId); } catch (x) {} }
   });
   boardEl.addEventListener('pointermove', (e) => {
-    if (busy || !pdStart || swappedThisGesture) return;
-    const cur = tileFromPoint(e.clientX, e.clientY);
-    if (cur && Core.areAdjacent(pdStart, cur) && (cur[0] !== pdStart[0] || cur[1] !== pdStart[1])) {
-      swappedThisGesture = true; suppressClick = true;
-      clearSel();
-      trySwap(pdStart, cur);
+    if (busy || !dragging) return;
+    const cell = tileFromPoint(e.clientX, e.clientY); if (!cell) return;
+    if (chain.length >= 2 && sameCell(cell, chain[chain.length - 2])) { chain.pop(); paintChain(); return; }
+    if (!inChain(cell) && Core.areAdjacent(cell, chain[chain.length - 1]) && grid[cell[0]][cell[1]].id === chainId()) {
+      chain.push(cell); paintChain();
     }
   });
-  window.addEventListener('pointerup', () => { pdStart = null; });
-  boardEl.addEventListener('click', (e) => {
-    if (busy) return;
-    if (suppressClick) { suppressClick = false; return; }
-    const cell = tileFromPoint(e.clientX, e.clientY);
-    if (!cell) return;
-    if (!selected) { selected = cell; markSel(cell, true); return; }
-    if (selected[0] === cell[0] && selected[1] === cell[1]) { clearSel(); return; }
-    if (Core.areAdjacent(selected, cell)) { const a = selected; clearSel(); trySwap(a, cell); }
-    else { clearSel(); selected = cell; markSel(cell, true); }
-  });
-  function markSel(cell, on) { const t = tileEls[cell[0]] && tileEls[cell[0]][cell[1]]; if (t) t.classList.toggle('sel', on); }
-  function clearSel() { if (selected) markSel(selected, false); selected = null; }
+  function endDrag() {
+    if (!dragging) return; dragging = false;
+    if (chain.length >= MIN_CONNECT) commitChain(); else { chain = []; render(false); }
+  }
+  window.addEventListener('pointerup', endDrag);
+  window.addEventListener('pointercancel', () => { dragging = false; chain = []; render(false); });
 
   const sleep = (ms) => new Promise((res) => setTimeout(res, ms));
 
-  async function trySwap(a, b) {
-    if (busy) return;
+  async function commitChain() {
     busy = true;
-    Core.swapInPlace(grid, a, b);
-    render(false);
-    await sleep(140);
-    if (!Core.hasMatch(grid)) {
-      Core.swapInPlace(grid, a, b);
-      render(false);
-      toast('No match there', true);
-      busy = false; return;
-    }
-    movesLeft--;
-    await resolve([a, b]);
+    const cells = chain.slice(); chain = [];
+    const id = grid[cells[0][0]][cells[0][1]].id, n = cells.length;
+
+    // long chains forge a power-up at the release tile
+    let specialType = null, specialPos = null;
+    if (n >= 5) specialType = 'bomb'; else if (n >= 4) specialType = 'blast';
+    if (specialType) specialPos = cells[cells.length - 1];
+
+    let clear = Core.expandClears(grid, cells);
+    if (specialPos) { const sk = specialPos[0] + ',' + specialPos[1]; clear = clear.filter(([r, c]) => (r + ',' + c) !== sk); }
+
+    const protectedHit = (id === protectedId);
+    const gained = protectedHit ? -40 * n : 30 * n + Math.max(0, n - 3) * 30;
+    score += gained; if (score < 0) score = 0;
+
+    for (const [r, c] of clear) { const t = tileEls[r][c]; if (t) t.classList.add('clearing'); }
     updateHUD();
-    busy = false;
-    checkEnd();
+    if (protectedHit) toast(`Protected friend! ${gained}`, 'warn');
+    else toast(`+${gained}${specialType ? '  ' + (specialType === 'bomb' ? '💬!' : '✨!') : ''}`, 'good');
+    await sleep(220);
+
+    for (const [r, c] of clear) grid[r][c] = null;
+    if (specialPos && grid[specialPos[0]][specialPos[1]]) grid[specialPos[0]][specialPos[1]].special = specialType;
+    Core.collapse(grid);
+    for (let r = 0; r < ROWS; r++) for (let c = 0; c < COLS; c++) if (grid[r][c] == null) grid[r][c] = { id: randId(), special: null };
+    render(true); await sleep(160);
+
+    await ensurePlayable();
+    movesLeft--; updateHUD(); busy = false; checkEnd();
   }
 
-  async function resolve(firstSwap) {
-    let cascade = 1;
-    while (true) {
-      const { cells, runs } = Core.findMatches(grid);
-      if (cells.length === 0) break;
-
-      const specials = {};
-      for (const run of runs) {
-        if (run.len < 4) continue;
-        const type = run.len >= 5 ? 'bomb' : 'blast';
-        let spot = run.cells.find(([r, c]) => firstSwap && firstSwap.some(([fr, fc]) => fr === r && fc === c));
-        if (!spot) spot = run.cells[Math.floor(run.cells.length / 2)];
-        specials[spot[0] + ',' + spot[1]] = type;
-      }
-
-      let clear = Core.expandClears(grid, cells);
-      clear = clear.filter(([r, c]) => !(specials[r + ',' + c]));
-
-      let gained = 0, hitProtected = 0;
-      for (const [r, c] of clear) {
-        const cell = grid[r][c];
-        if (!cell) continue;
-        if (cell.id === protectedId) { hitProtected++; gained -= 120; }
-        else gained += 30 * cascade;
-      }
-      for (const k in specials) gained += specials[k] === 'bomb' ? 150 : 60;
-      score += gained;
-      if (score < 0) score = 0;
-
-      for (const [r, c] of clear) { const t = tileEls[r][c]; if (t) t.classList.add('clearing'); }
-      updateHUD();
-      if (hitProtected) toast(`You matched your protected friend! −${hitProtected*120}`, true);
-      else if (cascade > 1) toast(`Combo ×${cascade}!  +${gained}`);
-      await sleep(220);
-
-      for (const [r, c] of clear) grid[r][c] = null;
-      for (const k in specials) {
-        const [r, c] = k.split(',').map(Number);
-        if (grid[r][c]) grid[r][c].special = specials[k];
-      }
-      Core.collapse(grid);
-      for (let r = 0; r < ROWS; r++) for (let c = 0; c < COLS; c++)
-        if (grid[r][c] == null) grid[r][c] = { id: randId(), special: null };
-
-      render(true);
-      await sleep(180);
-      cascade++;
-      firstSwap = null;
-    }
+  // Foundational rule: never a dead board. If no group of 3 exists, reshuffle.
+  async function ensurePlayable() {
+    if (Core.hasClearableGroup(grid, MIN_CONNECT)) return;
+    let tries = 0;
+    do { Core.reshuffle(grid); tries++; } while (!Core.hasClearableGroup(grid, MIN_CONNECT) && tries < 400);
+    toast('Shuffling — new paths!'); render(true); await sleep(300);
   }
 
-  function checkEnd() {
-    const L = LEVELS[level];
-    if (score >= L.target) { win(); }
-    else if (movesLeft <= 0) { lose(); }
-  }
+  function checkEnd() { const L = LEVELS[level]; if (score >= L.target) win(); else if (movesLeft <= 0) lose(); }
 
-  // ===== overlays =====
   const ov = $('overlay');
   function win() {
     const last = level >= LEVELS.length - 1;
     $('ovTitle').textContent = last ? '🎉 You finished every level!' : '✅ Level cleared!';
-    $('ovText').textContent = last
-      ? `Final score ${score}. That's the whole MVP loop — pick people, match, protect, repeat.`
+    $('ovText').textContent = last ? `Final score ${score}. That's the whole loop — connect, clear, protect, repeat.`
       : `Score ${score} / ${LEVELS[level].target}. Ready for level ${level + 2}?`;
-    const btn = $('ovBtn');
-    btn.textContent = last ? 'Play again' : 'Next level →';
+    const btn = $('ovBtn'); btn.textContent = last ? 'Play again' : 'Next level →';
     btn.onclick = () => { ov.classList.remove('show'); startLevel(last ? 0 : level + 1); };
     if (!last) { level++; save(); }
     ov.classList.add('show');
@@ -655,11 +542,9 @@ window.SNAP_FACES = [
   }
   $('ovQuit').onclick = () => { ov.classList.remove('show'); showScreen('setup'); };
 
-  // ===== boot =====
   if (!load()) { useDefaultPeople(); level = 0; }
   renderSetup();
 })();
 </script>
 </body>
 </html>
-                                                                                                                                                                                                                                                                                                                                                                                                                                                
