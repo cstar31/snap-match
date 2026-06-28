@@ -70,14 +70,23 @@
   .tile { position:relative; aspect-ratio:1; border-radius:14px; cursor:pointer;
     box-shadow:0 3px 8px rgba(0,0,0,.3), inset 0 2px 6px rgba(255,255,255,.18), inset 0 -3px 8px rgba(0,0,0,.18);
     transition:transform .12s ease, opacity .14s ease; }
-  .tile .pic { position:absolute; inset:15%; border-radius:50%; background-size:cover; background-position:center;
+  .tile .pic { position:absolute; inset:9%; border-radius:50%; background-size:cover; background-position:center;
     display:flex; align-items:center; justify-content:center; font-weight:800; color:#fff; font-size:1rem;
     box-shadow:inset 0 0 0 2px rgba(255,255,255,.6), 0 1px 4px rgba(0,0,0,.35); }
   .tile .mark { position:absolute; bottom:-3px; right:-3px; width:40%; height:40%; border-radius:50%;
     display:none; align-items:center; justify-content:center; font-size:.62em; background:#15102a; border:1px solid var(--panel-b); }
   .tile.link { transform:scale(1.1); outline:3px solid #fff; outline-offset:-3px; z-index:2; }
   .tile.ok   { outline:3px solid var(--good); outline-offset:-3px; }
-  .tile.clearing { transform:scale(0); opacity:0; }
+  .tile.clearing { opacity:0; transform:scale(.5); transition:opacity .12s ease, transform .12s ease; }
+  .board-flash { position:absolute; inset:0; border-radius:18px; pointer-events:none; opacity:0; z-index:4;
+    background:radial-gradient(circle at 50% 45%, rgba(255,255,255,.85), rgba(124,92,255,.35) 45%, transparent 72%); }
+  .board-flash.go { animation:flash .42s ease-out; }
+  @keyframes flash { 0%{opacity:0;} 22%{opacity:.6;} 100%{opacity:0;} }
+  .flow { position:absolute; border-radius:12px; pointer-events:none; opacity:0; mix-blend-mode:screen; z-index:3; animation:flow .5s ease-out; }
+  @keyframes flow { 0%{ transform:translateY(-45%); opacity:.7;} 70%{ opacity:.45;} 100%{ transform:translateY(0); opacity:0;} }
+  .frag { position:fixed; z-index:30; pointer-events:none; border-radius:4px;
+    box-shadow:inset 0 0 0 1px rgba(255,255,255,.3), 0 1px 3px rgba(0,0,0,.3);
+    transition:transform .85s cubic-bezier(.45,.05,.6,1), opacity .8s ease-in; will-change:transform,opacity; }
   .tile.fall { animation:drop .22s ease; }
   @keyframes drop { from{ transform:translateY(-22px); opacity:.4;} to{ transform:none; opacity:1;} }
   .tile.protected { outline:3px solid var(--gold); outline-offset:-3px; }
@@ -412,6 +421,46 @@ window.SNAP_FACES = [
   }
   function render(dropAll) { for (let r = 0; r < ROWS; r++) for (let c = 0; c < COLS; c++) paintTile(r, c, dropAll); }
 
+  // ===== juice: board flash, color-flow refill, shatter =====
+  const boardWrap = boardEl.parentElement;
+  let boardFlash = null;
+  function flashBoard() {
+    if (!boardFlash) { boardFlash = document.createElement('div'); boardFlash.className = 'board-flash'; boardWrap.appendChild(boardFlash); }
+    boardFlash.classList.remove('go'); void boardFlash.offsetWidth; boardFlash.classList.add('go');
+  }
+  function playRefillFlow(newByCol) {
+    const wrapR = boardWrap.getBoundingClientRect(), br = boardEl.getBoundingClientRect();
+    for (let c = 0; c < COLS; c++) {
+      const cols = newByCol[c]; if (!cols || !cols.length) continue;
+      const tr = tileEls[0][c].getBoundingClientRect();
+      const s = document.createElement('div'); s.className = 'flow';
+      s.style.left = (tr.left - wrapR.left) + 'px'; s.style.width = tr.width + 'px';
+      s.style.top = (br.top - wrapR.top) + 'px'; s.style.height = br.height + 'px';
+      const stops = cols.map((col, i) => `${col} ${i * 16}%`).join(',');
+      s.style.background = `linear-gradient(to bottom, ${stops}, transparent ${cols.length * 16 + 12}%)`;
+      boardWrap.appendChild(s); setTimeout(() => s.remove(), 620);
+    }
+  }
+  function shatterTile(r, c) {
+    const t = tileEls[r][c]; if (!t) return;
+    const cell = grid[r][c]; const color = cell ? people[cell.id].color : '#bbb';
+    const rect = t.getBoundingClientRect(); if (!rect.width) return;
+    const P = 3, w = rect.width / P, hh = rect.height / P;
+    for (let i = 0; i < P; i++) for (let j = 0; j < P; j++) {
+      const f = document.createElement('div'); f.className = 'frag';
+      f.style.left = (rect.left + j * w) + 'px'; f.style.top = (rect.top + i * hh) + 'px';
+      f.style.width = w + 'px'; f.style.height = hh + 'px'; f.style.background = color;
+      document.body.appendChild(f);
+      const dx = (Math.random() * 2 - 1) * 55;
+      const dy = window.innerHeight - rect.top + 60 + Math.random() * 170;
+      const rot = (Math.random() * 2 - 1) * 220;
+      requestAnimationFrame(() => requestAnimationFrame(() => {
+        f.style.transform = `translate(${dx}px, ${dy}px) rotate(${rot}deg) scale(.45)`; f.style.opacity = '0';
+      }));
+      setTimeout(() => f.remove(), 1000);
+    }
+  }
+
   const $ = (id) => document.getElementById(id);
   function updateHUD() {
     const L = LEVELS[level];
@@ -496,7 +545,8 @@ window.SNAP_FACES = [
     const gained = protectedHit ? -40 * n : 30 * n + Math.max(0, n - 3) * 30;
     score += gained; if (score < 0) score = 0;
 
-    for (const [r, c] of clear) { const t = tileEls[r][c]; if (t) t.classList.add('clearing'); }
+    for (const [r, c] of clear) { shatterTile(r, c); const t = tileEls[r][c]; if (t) t.classList.add('clearing'); }
+    flashBoard();
     updateHUD();
     if (protectedHit) toast(`Protected friend! ${gained}`, 'warn');
     else toast(`+${gained}${specialType ? '  ' + (specialType === 'bomb' ? '💬!' : '✨!') : ''}`, 'good');
@@ -505,8 +555,9 @@ window.SNAP_FACES = [
     for (const [r, c] of clear) grid[r][c] = null;
     if (specialPos && grid[specialPos[0]][specialPos[1]]) grid[specialPos[0]][specialPos[1]].special = specialType;
     Core.collapse(grid);
-    for (let r = 0; r < ROWS; r++) for (let c = 0; c < COLS; c++) if (grid[r][c] == null) grid[r][c] = { id: randId(), special: null };
-    render(true); await sleep(160);
+    const newByCol = Array.from({length:COLS},()=>[]);
+    for (let c = 0; c < COLS; c++) for (let r = 0; r < ROWS; r++) if (grid[r][c] == null) { const nid = randId(); grid[r][c] = { id: nid, special: null }; newByCol[c].push(people[nid].color); }
+    render(true); playRefillFlow(newByCol); await sleep(220);
 
     await ensurePlayable();
     movesLeft--; updateHUD(); busy = false; checkEnd();
